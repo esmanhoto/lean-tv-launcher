@@ -101,7 +101,7 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <HorizontalScrollView
+        <ScrollView
             android:id="@+id/favorites_scroll"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -109,16 +109,15 @@
             android:clipToPadding="false"
             android:scrollbars="none">
 
-            <LinearLayout
+            <GridLayout
                 android:id="@+id/favorites_row"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:orientation="horizontal"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp" />
-        </HorizontalScrollView>
+                android:paddingTop="12dp" />
+        </ScrollView>
     </LinearLayout>
 
     <FrameLayout

@@ -79,7 +79,9 @@ Wallpaper: a theme is three 1920×1080 images in
 `app/src/main/res/drawable-nodpi/`, named `<prefix>_clear.jpg`,
 `<prefix>_rain.jpg`, `<prefix>_snow.jpg`, and the launcher picks one by
 current weather. The repo ships two themes: **Meadow** (`wallpaper_*`) and
-**Retro RPG** (`retro_*`). A third slot, **Shinobi** (`shinobi_*`), is
+**Retro RPG** (`retro_*`):
+
+![Retro RPG theme](docs/screenshot-retro.png) A third slot, **Shinobi** (`shinobi_*`), is
 bring-your-own-images: the theme appears in the picker only if you drop all
 three files in before building (ours are anime fan-art, so they stay out of
 the repo). Replace any set (same names) to retheme; keep one calm corner for

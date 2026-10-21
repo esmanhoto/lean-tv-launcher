@@ -13,14 +13,16 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextPaint
 import android.text.format.DateFormat
+import android.text.style.MetricAffectingSpan
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.GridLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import java.time.LocalDateTime
@@ -45,8 +47,9 @@ class MainActivity : Activity() {
     private var forcedBucket: WeatherCodes.Bucket? = null
     private var defaultTimeTypeface: Typeface? = null
     private var defaultTextTypeface: Typeface? = null
-    private lateinit var favoritesScroll: HorizontalScrollView
-    private lateinit var favoritesRow: LinearLayout
+    private lateinit var favoritesScroll: ViewGroup
+    private lateinit var favoritesRow: GridLayout
+    private var favoritesRestingY = 0f
     private lateinit var allAppsPanel: View
     private lateinit var allAppsGrid: GridLayout
 
@@ -62,14 +65,20 @@ class MainActivity : Activity() {
 
     private val weatherTicker = object : Runnable {
         override fun run() {
+            val ticker = this
             Weather.fetch(latitude, longitude) { current ->
-                if (current != null) {
-                    mainHandler.post {
+                mainHandler.post {
+                    if (current != null) {
                         weatherView.text = current.display()
-                        current.daylightDisplay()?.let { sunView.text = it }
+                        current.daylightDisplay()?.let { sunView.text = alignArrow(it) }
                         liveBucket = WeatherCodes.bucket(current.code)
                         applyWallpaper(forcedBucket ?: liveBucket)
                     }
+                    mainHandler.removeCallbacks(ticker)
+                    mainHandler.postDelayed(
+                        ticker,
+                        if (current != null) WEATHER_INTERVAL_MS else WEATHER_RETRY_MS,
+                    )
                 }
             }
             SpotPrice.fetch { cents ->
@@ -77,7 +86,6 @@ class MainActivity : Activity() {
                     mainHandler.post { powerView.text = "⚡ ${SpotPrice.display(cents)}" }
                 }
             }
-            mainHandler.postDelayed(this, WEATHER_INTERVAL_MS)
         }
     }
 
@@ -138,9 +146,17 @@ class MainActivity : Activity() {
     private val latitude by lazy { getString(R.string.weather_latitude).toDouble() }
     private val longitude by lazy { getString(R.string.weather_longitude).toDouble() }
 
+    private val favoriteTileWidth by lazy {
+        val padding = resources.getDimensionPixelSize(R.dimen.screen_padding)
+        val spacing = resources.getDimensionPixelSize(R.dimen.tile_spacing)
+        val available = resources.displayMetrics.widthPixels - 2 * padding
+        (available - (FAVORITES_COLUMNS - 1) * spacing) / FAVORITES_COLUMNS
+    }
+
     private val focusAnimator = View.OnFocusChangeListener { view, hasFocus ->
         val scale = if (hasFocus) 1.08f else 1f
-        view.animate().scaleX(scale).scaleY(scale).setDuration(120).start()
+        val alpha = if (hasFocus) 1f else TILE_REST_ALPHA
+        view.animate().scaleX(scale).scaleY(scale).alpha(alpha).setDuration(120).start()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,7 +220,6 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         // HOME pressed while already home: reset to the resting state
         hideAllApps()
-        favoritesScroll.smoothScrollTo(0, 0)
         favoritesRow.getChildAt(0)?.requestFocus()
     }
 
@@ -223,6 +238,23 @@ class MainActivity : Activity() {
             hideAllApps()
         }
         // else swallow: a home screen never finishes itself
+    }
+
+    /** Roboto's "→" sits below the digits' optical center; nudge it up. */
+    private fun alignArrow(text: String): CharSequence {
+        val i = text.indexOf('→')
+        if (i < 0) return text
+        return SpannableString(text).apply {
+            setSpan(ArrowShiftSpan, i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    private object ArrowShiftSpan : MetricAffectingSpan() {
+        private fun shift(paint: TextPaint) {
+            paint.baselineShift -= (paint.textSize * 0.12f).toInt()
+        }
+        override fun updateDrawState(tp: TextPaint) = shift(tp)
+        override fun updateMeasureState(tp: TextPaint) = shift(tp)
     }
 
     private fun updateClock() {
@@ -253,6 +285,7 @@ class MainActivity : Activity() {
         icons: Map<String, Drawable?>,
     ) {
         favoritesRow.removeAllViews()
+        favoritesRow.columnCount = FAVORITES_COLUMNS
         for (entry in favorites) {
             favoritesRow.addView(appTile(favoritesRow, entry, banners[entry.packageName], icons[entry.packageName], inGrid = false))
         }
@@ -268,6 +301,26 @@ class MainActivity : Activity() {
                 startActivitySafely(Intent(Settings.ACTION_SETTINGS))
             }
         )
+
+        // Drop trailing margins so the grid reaches the screen edges exactly
+        val columns = favoritesRow.columnCount
+        val lastRowStart = ((favoritesRow.childCount - 1) / columns) * columns
+        for (i in 0 until favoritesRow.childCount) {
+            val child = favoritesRow.getChildAt(i)
+            val lp = child.layoutParams as GridLayout.LayoutParams
+            if ((i + 1) % columns == 0) lp.rightMargin = 0
+            if (i >= lastRowStart) lp.bottomMargin = 0
+            val row = i / columns
+            child.setOnFocusChangeListener { v, hasFocus ->
+                focusAnimator.onFocusChange(v, hasFocus)
+                if (hasFocus) revealFavorites(row)
+            }
+        }
+
+        val spacing = resources.getDimensionPixelSize(R.dimen.tile_spacing)
+        favoritesRestingY =
+            if (favoritesRow.childCount > columns) (favoriteTileWidth * 9 / 16 + spacing).toFloat() else 0f
+        favoritesScroll.translationY = favoritesRestingY
 
         allAppsGrid.removeAllViews()
         for (entry in apps) {
@@ -339,6 +392,7 @@ class MainActivity : Activity() {
             tile.findViewById<TextView>(R.id.tile_glyph).typeface = Typeface.MONOSPACE
         }
         tile.clipToOutline = true
+        tile.alpha = TILE_REST_ALPHA
         tile.onFocusChangeListener = focusAnimator
         if (inGrid) {
             val margin = resources.getDimensionPixelSize(R.dimen.grid_tile_margin)
@@ -346,6 +400,13 @@ class MainActivity : Activity() {
                 width = resources.getDimensionPixelSize(R.dimen.grid_tile_width)
                 height = resources.getDimensionPixelSize(R.dimen.grid_tile_height)
                 setMargins(margin, margin, margin, margin)
+            }
+        } else {
+            val spacing = resources.getDimensionPixelSize(R.dimen.tile_spacing)
+            tile.layoutParams = GridLayout.LayoutParams().apply {
+                width = favoriteTileWidth
+                height = favoriteTileWidth * 9 / 16
+                setMargins(0, 0, spacing, spacing)
             }
         }
         return tile
@@ -391,19 +452,33 @@ class MainActivity : Activity() {
             .show()
     }
 
+    /** Rest state shows only the first favorites row; focusing a lower row slides the grid up. */
+    private fun revealFavorites(row: Int) {
+        val target = if (row == 0) favoritesRestingY else 0f
+        if (favoritesScroll.translationY != target) {
+            favoritesScroll.animate().translationY(target).setDuration(180).start()
+        }
+    }
+
     private fun showAllApps() {
         allAppsPanel.visibility = View.VISIBLE
+        // Keep focus search from falling through the overlay onto the home tiles
+        favoritesScroll.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
         allAppsGrid.getChildAt(0)?.requestFocus()
     }
 
     private fun hideAllApps() {
         if (allAppsPanel.visibility == View.VISIBLE) {
             allAppsPanel.visibility = View.GONE
+            favoritesScroll.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             favoritesRow.getChildAt(0)?.requestFocus()
         }
     }
 
     private companion object {
         const val WEATHER_INTERVAL_MS = 30L * 60 * 1000
+        const val WEATHER_RETRY_MS = 30L * 1000
+        const val FAVORITES_COLUMNS = 6
+        const val TILE_REST_ALPHA = 0.8f
     }
 }
