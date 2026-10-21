@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     private var favoritesRestingY = 0f
     private lateinit var allAppsPanel: View
     private lateinit var allAppsGrid: GridLayout
+    private var allAppsStale = true
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -219,6 +220,10 @@ class MainActivity : Activity() {
     override fun onStop() {
         unregisterReceiver(clockReceiver)
         mainHandler.removeCallbacks(weatherTicker)
+        // Free the all-apps banners while another app is in front; rebuilt on next open
+        hideAllApps()
+        allAppsGrid.removeAllViews()
+        allAppsStale = true
         super.onStop()
     }
 
@@ -271,22 +276,43 @@ class MainActivity : Activity() {
     }
 
     private fun reloadApps() {
+        allAppsStale = true
+        allAppsGrid.removeAllViews()
         Thread {
             val apps = repository.loadApps()
             val favorites = Favorites.compose(apps, favoritesStore.load())
+            val banners = HashMap<String, Drawable?>()
+            val icons = HashMap<String, Drawable?>()
+            for (entry in favorites) {
+                banners[entry.packageName] = repository.banner(entry.packageName)
+                icons[entry.packageName] = repository.icon(entry.packageName)
+            }
+            runOnUiThread { populateFavorites(favorites, banners, icons) }
+        }.start()
+    }
+
+    private fun loadAllApps(onDone: () -> Unit = {}) {
+        allAppsStale = false
+        Thread {
+            val apps = repository.loadApps()
             val banners = HashMap<String, Drawable?>()
             val icons = HashMap<String, Drawable?>()
             for (entry in apps) {
                 banners[entry.packageName] = repository.banner(entry.packageName)
                 icons[entry.packageName] = repository.icon(entry.packageName)
             }
-            runOnUiThread { populate(favorites, apps, banners, icons) }
+            runOnUiThread {
+                allAppsGrid.removeAllViews()
+                for (entry in apps) {
+                    allAppsGrid.addView(appTile(allAppsGrid, entry, banners[entry.packageName], icons[entry.packageName], inGrid = true))
+                }
+                onDone()
+            }
         }.start()
     }
 
-    private fun populate(
+    private fun populateFavorites(
         favorites: List<AppEntry>,
-        apps: List<AppEntry>,
         banners: Map<String, Drawable?>,
         icons: Map<String, Drawable?>,
     ) {
@@ -328,12 +354,9 @@ class MainActivity : Activity() {
             if (favoritesRow.childCount > columns) (favoriteTileWidth * 9 / 16 + spacing).toFloat() else 0f
         favoritesScroll.translationY = favoritesRestingY
 
-        allAppsGrid.removeAllViews()
-        for (entry in apps) {
-            allAppsGrid.addView(appTile(allAppsGrid, entry, banners[entry.packageName], icons[entry.packageName], inGrid = true))
-        }
-
-        if (allAppsPanel.visibility != View.VISIBLE) {
+        if (allAppsPanel.visibility == View.VISIBLE) {
+            loadAllApps { allAppsGrid.getChildAt(0)?.requestFocus() }
+        } else {
             favoritesRow.getChildAt(0)?.requestFocus()
         }
     }
@@ -470,7 +493,11 @@ class MainActivity : Activity() {
         allAppsPanel.visibility = View.VISIBLE
         // Keep focus search from falling through the overlay onto the home tiles
         favoritesScroll.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-        allAppsGrid.getChildAt(0)?.requestFocus()
+        if (allAppsStale) {
+            loadAllApps { allAppsGrid.getChildAt(0)?.requestFocus() }
+        } else {
+            allAppsGrid.getChildAt(0)?.requestFocus()
+        }
     }
 
     private fun hideAllApps() {
