@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+
+# Local SDK location & signing secrets
+local.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Captures
+captures/
+
+# Local-only wallpaper sets (fan-art themes that must not be redistributed)
+app/src/main/res/drawable-nodpi/shinobi_*.jpg

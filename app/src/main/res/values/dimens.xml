@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_padding">48dp</dimen>
+    <dimen name="tile_width">220dp</dimen>
+    <dimen name="tile_height">124dp</dimen>
+    <dimen name="tile_spacing">16dp</dimen>
+    <dimen name="grid_tile_width">164dp</dimen>
+    <dimen name="grid_tile_height">92dp</dimen>
+    <dimen name="grid_tile_margin">8dp</dimen>
+</resources>

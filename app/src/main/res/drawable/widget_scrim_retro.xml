@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Classic JRPG dialog box: blue gradient, double border -->
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="8dp" />
+            <gradient
+                android:angle="270"
+                android:endColor="#F20A1230"
+                android:startColor="#F21C2C5E" />
+            <stroke
+                android:width="2.5dp"
+                android:color="#F2EFDC" />
+        </shape>
+    </item>
+    <item
+        android:bottom="5dp"
+        android:left="5dp"
+        android:right="5dp"
+        android:top="5dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="5dp" />
+            <stroke
+                android:width="1.5dp"
+                android:color="#7E90C4" />
+        </shape>
+    </item>
+</layer-list>
