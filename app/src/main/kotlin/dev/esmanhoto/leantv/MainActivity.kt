@@ -6,7 +6,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
@@ -93,7 +96,10 @@ class MainActivity : Activity() {
     private fun applyWallpaper(bucket: WeatherCodes.Bucket) {
         if (bucket == wallpaperBucket) return
         wallpaperBucket = bucket
-        window.setBackgroundDrawableResource(Wallpapers.res(this, theme, bucket))
+        // RGB_565 halves the decoded bitmap + GL texture vs the default ARGB_8888
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+        val bitmap = BitmapFactory.decodeResource(resources, Wallpapers.res(this, theme, bucket), options)
+        window.setBackgroundDrawable(BitmapDrawable(resources, bitmap))
     }
 
     /** Long-press on the Theme tile: clear → rain → snow → back to live weather. */
