@@ -28,6 +28,9 @@ MediaTek SoC, 1.8 GB RAM, Android TV 10):
 - **Kotlin + classic Android Views.** No Compose (runtime overhead), no
   Flutter (ships a ~100 MB engine), no third-party runtime dependencies at all.
 - Target idle RSS: **40–70 MB** (stock launcher: ~270 MB; FLauncher: ~199 MB).
+  Measured on the target TV: **~52 MB PSS** idle on the home screen —
+  wallpapers decode at RGB_565 and the all-apps grid loads lazily and is
+  dropped while another app is in front.
 - Deliberately out of scope: video/animated wallpapers, recommendation rows,
   content previews, the widgets framework.
 
