@@ -16,6 +16,9 @@ with the only things a TV home screen actually needs:
 - **All-apps grid** behind a single tile.
 - **Settings shortcut** tile (important when the stock launcher is disabled).
 - **Static wallpaper**, loaded once as the window background.
+- **Ambient mode** — after 10 minutes idle the tiles fade out, the backlight
+  dims, and the theme's weather wallpapers rotate slowly; any key wakes it.
+  A built-in replacement for the stock screensaver (which holds ~130 MB).
 
 Nothing else. No background services, no telemetry, no network calls except the
 weather fetch every 30 minutes while the screen is on.
@@ -55,6 +58,15 @@ Optionally disable the stock launcher afterwards to reclaim its RAM:
 adb shell pm disable-user --user 0 com.google.android.tvlauncher
 ```
 
+Lean TV's ambient mode replaces the system screensaver, so turn that off too
+(otherwise it fires first and ambient never shows). Give the screen-off
+timeout enough room for ambient to run before the panel powers down:
+
+```bash
+adb shell settings put secure screensaver_enabled 0
+adb shell settings put system screen_off_timeout 1800000   # screen off after 30 min
+```
+
 ### Rescue
 
 If the home screen ever breaks, the stock launcher is one command away
@@ -73,6 +85,11 @@ adb shell cmd package set-home-activity com.google.android.tvlauncher/.MainActiv
 - The **✦ Theme** tile opens the theme picker; **long-press** it to preview
   the weather wallpapers (clear → rain → snow → back to live weather).
 - The **⚙ Settings** tile opens Android TV settings.
+- **Ambient mode** starts by itself after 10 minutes without a key press on
+  the home screen: tiles fade out, the clock stays, the screen dims, and the
+  wallpaper crossfades between the theme's weather variants every 3 minutes.
+  The first key press only wakes it. Timings are the `AMBIENT_*` constants in
+  [`MainActivity.kt`](app/src/main/kotlin/dev/esmanhoto/leantv/MainActivity.kt).
 
 ## Configuration
 

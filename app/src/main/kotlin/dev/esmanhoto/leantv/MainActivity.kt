@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.TransitionDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +24,7 @@ import android.text.format.DateFormat
 import android.text.style.MetricAffectingSpan
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.ViewGroup
 import android.widget.GridLayout
 import android.widget.ImageView
@@ -46,6 +48,7 @@ class MainActivity : Activity() {
     private lateinit var sunView: TextView
     private lateinit var powerView: TextView
     private var wallpaperBucket: WeatherCodes.Bucket? = null
+    private var wallpaperDrawable: Drawable? = null
     private var liveBucket: WeatherCodes.Bucket = WeatherCodes.Bucket.CLEAR
     private var forcedBucket: WeatherCodes.Bucket? = null
     private var defaultTimeTypeface: Typeface? = null
@@ -56,6 +59,8 @@ class MainActivity : Activity() {
     private lateinit var allAppsPanel: View
     private lateinit var allAppsGrid: GridLayout
     private var allAppsStale = true
+    private lateinit var ambientScrim: View
+    private var ambient = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -76,7 +81,7 @@ class MainActivity : Activity() {
                         weatherView.text = current.display()
                         current.daylightDisplay()?.let { sunView.text = alignArrow(it) }
                         liveBucket = WeatherCodes.bucket(current.code)
-                        applyWallpaper(forcedBucket ?: liveBucket)
+                        if (!ambient) applyWallpaper(forcedBucket ?: liveBucket)
                     }
                     mainHandler.removeCallbacks(ticker)
                     mainHandler.postDelayed(
@@ -94,13 +99,22 @@ class MainActivity : Activity() {
     }
 
     /** Swaps the window background when the weather bucket (or theme) changes. */
-    private fun applyWallpaper(bucket: WeatherCodes.Bucket) {
+    private fun applyWallpaper(bucket: WeatherCodes.Bucket, crossfade: Boolean = false) {
         if (bucket == wallpaperBucket) return
         wallpaperBucket = bucket
         // RGB_565 halves the decoded bitmap + GL texture vs the default ARGB_8888
         val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
         val bitmap = BitmapFactory.decodeResource(resources, Wallpapers.res(this, theme, bucket), options)
-        window.setBackgroundDrawable(BitmapDrawable(resources, bitmap))
+        val next = BitmapDrawable(resources, bitmap)
+        val previous = wallpaperDrawable
+        wallpaperDrawable = next
+        if (crossfade && previous != null) {
+            val transition = TransitionDrawable(arrayOf(previous, next))
+            window.setBackgroundDrawable(transition)
+            transition.startTransition(CROSSFADE_MS)
+        } else {
+            window.setBackgroundDrawable(next)
+        }
     }
 
     /** Long-press on the Theme tile: clear → rain → snow → back to live weather. */
@@ -190,6 +204,7 @@ class MainActivity : Activity() {
         favoritesRow = findViewById(R.id.favorites_row)
         allAppsPanel = findViewById(R.id.all_apps_panel)
         allAppsGrid = findViewById(R.id.all_apps_grid)
+        ambientScrim = findViewById(R.id.ambient_scrim)
 
         registerReceiver(packageReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -215,11 +230,14 @@ class MainActivity : Activity() {
         })
         updateClock()
         mainHandler.post(weatherTicker)
+        scheduleAmbient()
     }
 
     override fun onStop() {
         unregisterReceiver(clockReceiver)
         mainHandler.removeCallbacks(weatherTicker)
+        exitAmbient()
+        mainHandler.removeCallbacks(ambientStarter)
         // Free the all-apps banners while another app is in front; rebuilt on next open
         hideAllApps()
         allAppsGrid.removeAllViews()
@@ -236,6 +254,11 @@ class MainActivity : Activity() {
 
     // Desktop-emulator convenience: some setups forward Esc as ESCAPE, not BACK
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (ambient) {
+            // The waking key press only wakes; swallow it so it doesn't act on a tile
+            if (event.action == KeyEvent.ACTION_UP) exitAmbient()
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
             if (event.action == KeyEvent.ACTION_UP) hideAllApps()
             return true
@@ -481,6 +504,58 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private val ambientStarter = Runnable { enterAmbient() }
+
+    private val ambientRotator = object : Runnable {
+        override fun run() {
+            val buckets = WeatherCodes.Bucket.entries
+            val current = buckets.indexOf(wallpaperBucket).coerceAtLeast(0)
+            applyWallpaper(buckets[(current + 1) % buckets.size], crossfade = true)
+            mainHandler.postDelayed(this, AMBIENT_ROTATE_MS)
+        }
+    }
+
+    private fun scheduleAmbient() {
+        mainHandler.removeCallbacks(ambientStarter)
+        mainHandler.postDelayed(ambientStarter, AMBIENT_DELAY_MS)
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        if (!ambient) scheduleAmbient()
+    }
+
+    /** Built-in screensaver: tiles fade out, screen dims, wallpapers rotate; clock stays. */
+    private fun enterAmbient() {
+        if (ambient) return
+        if (!hasWindowFocus()) {
+            // A dialog is up; its keys never reach us, so we couldn't wake. Try later.
+            scheduleAmbient()
+            return
+        }
+        ambient = true
+        hideAllApps()
+        favoritesScroll.animate().alpha(0f).setDuration(600).start()
+        ambientScrim.visibility = View.VISIBLE
+        ambientScrim.animate().alpha(AMBIENT_SCRIM_ALPHA).setDuration(600).start()
+        window.attributes = window.attributes.apply { screenBrightness = AMBIENT_BRIGHTNESS }
+        mainHandler.postDelayed(ambientRotator, AMBIENT_ROTATE_MS)
+    }
+
+    private fun exitAmbient() {
+        if (!ambient) return
+        ambient = false
+        mainHandler.removeCallbacks(ambientRotator)
+        favoritesScroll.animate().alpha(1f).setDuration(300).start()
+        ambientScrim.animate().alpha(0f).setDuration(300)
+            .withEndAction { ambientScrim.visibility = View.GONE }.start()
+        window.attributes = window.attributes.apply {
+            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
+        applyWallpaper(forcedBucket ?: liveBucket)
+        scheduleAmbient()
+    }
+
     /** Rest state shows only the first favorites row; focusing a lower row slides the grid up. */
     private fun revealFavorites(row: Int) {
         val target = if (row == 0) favoritesRestingY else 0f
@@ -513,5 +588,10 @@ class MainActivity : Activity() {
         const val WEATHER_RETRY_MS = 30L * 1000
         const val FAVORITES_COLUMNS = 6
         const val TILE_REST_ALPHA = 0.8f
+        const val AMBIENT_DELAY_MS = 10L * 60 * 1000
+        const val AMBIENT_ROTATE_MS = 3L * 60 * 1000
+        const val AMBIENT_SCRIM_ALPHA = 0.45f
+        const val AMBIENT_BRIGHTNESS = 0.1f
+        const val CROSSFADE_MS = 1200
     }
 }
