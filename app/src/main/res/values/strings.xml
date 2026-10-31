@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name" translatable="false">Lean TV</string>
     <string name="all_apps">Apps</string>
+    <string name="inputs">Inputs</string>
+    <string name="key_remap_label">Lean TV key remap</string>
+    <string name="key_remap_description">Remaps branded remote buttons (e.g. Prime Video) to other apps. Lean TV ignores all other keys and reads nothing from the screen.</string>
+    <string name="no_inputs">No external inputs found</string>
     <string name="settings">Settings</string>
     <string name="app_info">App info</string>
     <string name="add_favorite">Add to favorites</string>

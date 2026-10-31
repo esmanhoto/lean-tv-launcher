@@ -248,6 +248,7 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         // HOME pressed while already home: reset to the resting state
+        exitAmbient()
         hideAllApps()
         favoritesRow.getChildAt(0)?.requestFocus()
     }
@@ -257,6 +258,10 @@ class MainActivity : Activity() {
         if (ambient) {
             // The waking key press only wakes; swallow it so it doesn't act on a tile
             if (event.action == KeyEvent.ACTION_UP) exitAmbient()
+            return true
+        }
+        if (event.keyCode == KeyEvent.KEYCODE_TV_INPUT) {
+            if (event.action == KeyEvent.ACTION_UP) showInputsMenu()
             return true
         }
         if (event.keyCode == KeyEvent.KEYCODE_ESCAPE) {
@@ -562,6 +567,20 @@ class MainActivity : Activity() {
         if (favoritesScroll.translationY != target) {
             favoritesScroll.animate().translationY(target).setDuration(180).start()
         }
+    }
+
+    private fun showInputsMenu() {
+        val inputs = TvInputs.list(this)
+        if (inputs.isEmpty()) {
+            Toast.makeText(this, R.string.no_inputs, Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.inputs)
+            .setItems(inputs.map { it.label }.toTypedArray()) { _, which ->
+                startActivitySafely(TvInputs.switchIntent(inputs[which].id))
+            }
+            .show()
     }
 
     private fun showAllApps() {
