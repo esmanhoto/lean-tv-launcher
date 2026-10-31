@@ -84,6 +84,22 @@ adb shell cmd package set-home-activity com.google.android.tvlauncher/.MainActiv
 - The **▦ Apps** tile opens the all-apps grid (BACK closes it).
 - The **✦ Theme** tile opens the theme picker; **long-press** it to preview
   the weather wallpapers (clear → rain → snow → back to live weather).
+- **Remote key remap** (optional): enabling the "Lean TV key remap"
+  accessibility service makes the remote's Input button open an input picker
+  over whatever is on screen (● marks inputs with a live signal), and remaps
+  branded app buttons (default: Prime Video → HBO Max; edit `REMAP` in
+  [`KeyRemapService.kt`](app/src/main/kotlin/dev/esmanhoto/leantv/KeyRemapService.kt)).
+  Without the service, the Input button still opens the picker while on the
+  home screen — unless the TV's firmware hardwires the button (e.g. Xiaomi),
+  in which case the service is required.
+  This works even on TVs whose firmware hardwires those buttons (e.g.
+  Xiaomi): the accessibility key filter runs before the vendor's global-key
+  handler. Enable it under Settings → Accessibility, or:
+
+  ```bash
+  adb shell settings put secure enabled_accessibility_services dev.esmanhoto.leantv/.KeyRemapService
+  adb shell settings put secure accessibility_enabled 1
+  ```
 - The **⚙ Settings** tile opens Android TV settings.
 - **Ambient mode** starts by itself after 10 minutes without a key press on
   the home screen: tiles fade out, the clock stays, the screen dims, and the
